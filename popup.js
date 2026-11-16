@@ -12,6 +12,7 @@ const feedbackEl = document.getElementById("feedback");
 
 let pollTimer = null;
 let currentTabId = null;
+let collectStarted = false;
 
 function setStatus(text, type) {
   statusBadge.textContent = text;
@@ -45,7 +46,7 @@ async function ensureContentScript(tabId) {
 }
 
 async function refreshState() {
-  if (!currentTabId) return;
+  if (!currentTabId) return null;
   try {
     const info = await chrome.tabs.sendMessage(currentTabId, { type: "GET_INFO" });
     chatTitleEl.textContent = info.chatTitle || "Chat sem título";
@@ -63,16 +64,34 @@ async function refreshState() {
       if ((info.count || 0) > 0) {
         setStatus("Concluído", "done");
         downloadBtn.disabled = false;
-        setFeedback(`Pronto para exportar ${info.count} mensagens.`);
+        const otherChat =
+          info.collectedTitle && info.chatTitle && info.collectedTitle !== info.chatTitle;
+        if (otherChat) {
+          setFeedback(
+            `As ${info.count} mensagens coletadas são de "${info.collectedTitle}". Clique em Coletar Chat para coletar o chat atual.`,
+            true
+          );
+        } else {
+          setFeedback(`Pronto para exportar ${info.count} mensagens.`);
+        }
+        collectStarted = false;
         stopPolling();
       } else {
         setStatus("Pronto", "idle");
+        downloadBtn.disabled = true;
+        if (collectStarted) {
+          collectStarted = false;
+          stopPolling();
+          setFeedback("Nenhuma mensagem encontrada. Abra um chat no Teams e tente novamente.", true);
+        }
       }
     }
+    return info;
   } catch {
     stopPolling();
     setStatus("Erro", "error");
     setFeedback("Não foi possível comunicar com a aba do Teams.", true);
+    return null;
   }
 }
 
@@ -719,13 +738,21 @@ startBtn.addEventListener("click", async () => {
   downloadBtn.disabled = true;
   setFeedback("Iniciando coleta...");
 
-  await chrome.tabs.sendMessage(currentTabId, {
-    type: "START_COLLECT",
-    autoScroll: autoScrollEl.checked,
-    maxMessages: Number(maxMessagesEl.value) || 0,
-    includeImages: includeImagesEl.checked
-  });
-  startPolling();
+  try {
+    await chrome.tabs.sendMessage(currentTabId, {
+      type: "START_COLLECT",
+      autoScroll: autoScrollEl.checked,
+      maxMessages: Number(maxMessagesEl.value) || 0,
+      includeImages: includeImagesEl.checked
+    });
+    collectStarted = true;
+    startPolling();
+  } catch {
+    setStatus("Erro", "error");
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    setFeedback("Não foi possível iniciar a coleta. Recarregue a página do Teams.", true);
+  }
 });
 
 stopBtn.addEventListener("click", async () => {
@@ -737,30 +764,54 @@ stopBtn.addEventListener("click", async () => {
 downloadBtn.addEventListener("click", async () => {
   if (!currentTabId) return;
   const format = exportFormatEl.value;
-  const data = await chrome.tabs.sendMessage(currentTabId, {
-    type: "GET_MESSAGES",
-    maxMessages: Number(maxMessagesEl.value) || 0
-  });
+  downloadBtn.disabled = true;
+  setFeedback("Preparando exportação...");
 
-  if (!data || !data.messages || data.messages.length === 0) {
-    setFeedback("Nenhuma mensagem encontrada para exportar.", true);
-    return;
+  try {
+    const meta = await chrome.tabs.sendMessage(currentTabId, {
+      type: "GET_EXPORT_META",
+      maxMessages: Number(maxMessagesEl.value) || 0
+    });
+
+    if (!meta || !meta.total) {
+      setFeedback("Nenhuma mensagem encontrada para exportar.", true);
+      return;
+    }
+
+    // Messages come in chunks so large chats with embedded images fit in extension messaging
+    const messages = [];
+    while (messages.length < meta.total) {
+      const chunk = await chrome.tabs.sendMessage(currentTabId, {
+        type: "GET_MESSAGES_CHUNK",
+        start: messages.length
+      });
+      if (!chunk || !Array.isArray(chunk.messages) || chunk.messages.length === 0) break;
+      messages.push(...chunk.messages);
+      setFeedback(`Preparando exportação... ${messages.length}/${meta.total}`);
+    }
+
+    if (messages.length < meta.total) {
+      throw new Error(`apenas ${messages.length} de ${meta.total} mensagens foram recebidas`);
+    }
+
+    const content = formatMessages(meta.chatTitle, messages, format, meta.avatars || {});
+    const mimeMap = {
+      html: "text/html;charset=utf-8",
+      md: "text/markdown;charset=utf-8",
+      json: "application/json;charset=utf-8",
+      txt: "text/plain;charset=utf-8"
+    };
+
+    const filename = `${sanitizeFilename(meta.chatTitle)}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.${format}`;
+    triggerDownload(content, filename, mimeMap[format]);
+    setFeedback(`Arquivo ${filename} baixado com sucesso!`);
+  } catch (err) {
+    setFeedback(`Falha ao exportar: ${err && err.message ? err.message : err}`, true);
+  } finally {
+    downloadBtn.disabled = false;
   }
-
-  const content = formatMessages(data.chatTitle, data.messages, format, data.avatars || {});
-  const ext = format;
-  const mimeMap = {
-    html: "text/html;charset=utf-8",
-    md: "text/markdown;charset=utf-8",
-    json: "application/json;charset=utf-8",
-    txt: "text/plain;charset=utf-8"
-  };
-
-  const filename = `${sanitizeFilename(data.chatTitle)}_${new Date()
-    .toISOString()
-    .slice(0, 10)}.${ext}`;
-  triggerDownload(content, filename, mimeMap[format]);
-  setFeedback(`Arquivo ${filename} baixado com sucesso!`);
 });
 
 (async function init() {
@@ -775,14 +826,10 @@ downloadBtn.addEventListener("click", async () => {
 
   currentTabId = tab.id;
   try {
-    const info = await ensureContentScript(currentTabId);
-    chatTitleEl.textContent = info.chatTitle || "Chat sem título";
-    msgCountEl.textContent = String(info.count || 0);
-    if (info.running) {
+    await ensureContentScript(currentTabId);
+    const info = await refreshState();
+    if (info && info.running) {
       startPolling();
-    } else if ((info.count || 0) > 0) {
-      setStatus("Concluído", "done");
-      downloadBtn.disabled = false;
     }
   } catch {
     setStatus("Erro", "error");

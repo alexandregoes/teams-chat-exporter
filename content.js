@@ -9,6 +9,7 @@
     messagesMap: new Map(),
     avatarsMap: new Map(),
     imageCache: new Map(),
+    exportList: null,
     batchCounter: 0
   };
 
@@ -26,7 +27,12 @@
         return el.textContent.trim();
       }
     }
-    return document.title.replace(/\s*\|\s*Microsoft Teams.*$/i, "").trim() || "teams-chat";
+    return (
+      document.title
+        .replace(/^\(\d+\+?\)\s*/, "")
+        .replace(/\s*\|\s*Microsoft Teams.*$/i, "")
+        .trim() || "teams-chat"
+    );
   }
 
   function findMessageContainer() {
@@ -120,22 +126,29 @@
     if (state.imageCache.has(src)) return state.imageCache.get(src);
 
     const task = (async () => {
-      try {
+      // Authenticated first (chat images); public CDNs (emoticons, icons) reject
+      // credentialed cross-origin requests, so retry anonymously.
+      for (const credentials of ["include", "omit"]) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(src, { credentials: "include", signal: controller.signal });
-        clearTimeout(timer);
-        if (!res.ok) return src;
-        const blob = await res.blob();
-        return await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : src);
-          reader.onerror = () => resolve(src);
-          reader.readAsDataURL(blob);
-        });
-      } catch {
-        return src;
+        try {
+          const res = await fetch(src, { credentials, signal: controller.signal });
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+          if (dataUrl) return dataUrl;
+        } catch {
+          // try next mode
+        } finally {
+          clearTimeout(timer);
+        }
       }
+      return src;
     })();
 
     state.imageCache.set(src, task);
@@ -167,10 +180,21 @@
     const rawText = extractText(quoted);
     if (!rawText) return null;
 
+    // The card text usually starts with "Author\nTimestamp\n..."; lift those
+    // lines into the metadata instead of repeating them in the quoted text.
+    let author = qAuthor || "";
+    const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (!author && qTime && lines.length >= 3 && lines[1] === qTime) {
+      author = lines[0];
+    }
+    while (lines.length > 1 && (lines[0] === author || lines[0] === qTime)) {
+      lines.shift();
+    }
+
     return {
-      author: qAuthor || "",
+      author,
       timestamp: qTime || "",
-      text: rawText
+      text: lines.join("\n")
     };
   }
 
@@ -186,7 +210,14 @@
         ? emojiImg.getAttribute("alt") || emojiImg.getAttribute("aria-label") || ""
         : "";
       const txt = extractText(pill).replace(/\s+/g, " ");
-      const combined = emojiAlt && !txt.includes(emojiAlt) ? `${emojiAlt} ${txt}`.trim() : txt;
+      // Teams exposes "1 Like reaction." / "2 Like reactions. 2"; keep just emoji + count
+      const countMatch = txt.match(/\d+/);
+      let combined;
+      if (emojiAlt && countMatch) {
+        combined = `${emojiAlt} ${countMatch[0]}`;
+      } else {
+        combined = emojiAlt && !txt.includes(emojiAlt) ? `${emojiAlt} ${txt}`.trim() : txt;
+      }
       if (combined && !seen.has(combined)) {
         seen.add(combined);
         out.push(combined);
@@ -322,11 +353,12 @@
       }
 
       const dataUrl = await urlToDataUrl(src);
+      const originalAlt = (img.getAttribute("alt") || "").trim();
       for (const attr of Array.from(img.attributes)) {
         img.removeAttribute(attr.name);
       }
       img.setAttribute("src", dataUrl);
-      img.setAttribute("alt", img.getAttribute("alt") || "Imagem do chat");
+      img.setAttribute("alt", originalAlt || "Imagem do chat");
       img.setAttribute("class", "chat-img");
       img.setAttribute("loading", "lazy");
     }
@@ -503,8 +535,9 @@
 
       if (!state.messagesMap.has(msg.id)) {
         const bodyHtml = await buildCleanBodyHtml(msg.bodyEl, includeImages);
+        // Images already embedded in bodyHtml are not stored a second time
         const images =
-          includeImages && msg.imageUrls.length > 0
+          includeImages && !bodyHtml && msg.imageUrls.length > 0
             ? await Promise.all(msg.imageUrls.map((u) => urlToDataUrl(u)))
             : [];
 
@@ -519,6 +552,7 @@
           attachments: msg.attachments,
           isUrgent: msg.isUrgent,
           images,
+          _key: getSortKey(msg.id, msg.timestamp),
           _batch: batchId,
           _within: withinIdx++
         });
@@ -528,14 +562,42 @@
     return added;
   }
 
+  // Chronological key: ISO timestamp when available, else a 13-digit epoch message id
+  function getSortKey(id, timestamp) {
+    if (timestamp && /^\d{4}-\d{2}-\d{2}T/.test(timestamp)) {
+      const t = Date.parse(timestamp);
+      if (!Number.isNaN(t)) return t;
+    }
+    if (/^\d{13}$/.test(String(id))) return Number(id);
+    return null;
+  }
+
   function getOrderedMessages() {
     const list = Array.from(state.messagesMap.values());
-    // Older batches (more negative _batch) come first; within each batch, top-to-bottom (_within)
+    // Baseline: older batches (more negative _batch) first; within each batch, top-to-bottom
     list.sort((a, b) => {
       if (a._batch !== b._batch) return a._batch - b._batch;
       return a._within - b._within;
     });
-    return list.map(({ author, timestamp, text, bodyHtml, replyTo, reactions, attachments, isUrgent, images }) => ({
+
+    // Messages without a time key inherit the key of their nearest neighbour,
+    // so they stay next to the messages they were seen with.
+    const keys = list.map((m) => m._key);
+    let carry = null;
+    for (let i = 0; i < keys.length; i++) {
+      if (keys[i] != null) carry = keys[i];
+      else keys[i] = carry;
+    }
+    carry = null;
+    for (let i = keys.length - 1; i >= 0; i--) {
+      if (list[i]._key != null) carry = list[i]._key;
+      if (keys[i] == null) keys[i] = carry;
+    }
+
+    const order = list.map((_, i) => i);
+    order.sort((a, b) => (keys[a] ?? 0) - (keys[b] ?? 0) || a - b);
+
+    return order.map((i) => list[i]).map(({ author, timestamp, text, bodyHtml, replyTo, reactions, attachments, isUrgent, images }) => ({
       author,
       timestamp,
       text,
@@ -562,68 +624,90 @@
     state.batchCounter = 0;
     state.chatTitle = getChatTitle();
 
-    const container = findMessageContainer();
+    state.exportList = null;
 
-    // First scroll all the way to the bottom so the newest messages are loaded
-    if (autoScroll && container) {
-      let bottomIdle = 0;
-      while (!state.stopRequested && bottomIdle < 3) {
-        const prevHeight = container.scrollHeight;
-        container.scrollTop = container.scrollHeight;
-        await sleep(400);
-        const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
-        if (atBottom && container.scrollHeight === prevHeight) {
-          bottomIdle++;
-        } else {
-          bottomIdle = 0;
+    try {
+      const container = findMessageContainer();
+
+      // First scroll all the way to the bottom so the newest messages are loaded.
+      // "Settled" = position and height stop changing (works for reversed scrollers too).
+      if (autoScroll && container) {
+        let settled = 0;
+        for (let i = 0; i < 60 && !state.stopRequested && settled < 3; i++) {
+          const prevHeight = container.scrollHeight;
+          container.scrollTop = container.scrollHeight;
+          const afterSet = container.scrollTop;
+          await sleep(400);
+          if (
+            container.scrollHeight === prevHeight &&
+            Math.abs(container.scrollTop - afterSet) < 2
+          ) {
+            settled++;
+          } else {
+            settled = 0;
+          }
         }
       }
-    }
 
-    await collectVisibleMessages(container, includeImages);
+      await collectVisibleMessages(container, includeImages);
 
-    if (autoScroll && container) {
-      let idleRounds = 0;
-      const maxIdleRounds = 6;
+      if (autoScroll && container) {
+        // Stop after ~8s with no movement, no growth and no new messages
+        // (top reached, or the scroller is stuck).
+        const maxIdleRounds = 12;
+        // Safety net: stop if the list keeps moving but yields nothing new for ~26s.
+        const maxRoundsWithoutNew = 40;
+        let idleRounds = 0;
+        let roundsWithoutNew = 0;
 
-      while (!state.stopRequested && idleRounds < maxIdleRounds) {
-        if (maxMessages > 0 && state.messagesMap.size >= maxMessages) {
-          break;
-        }
+        while (
+          !state.stopRequested &&
+          idleRounds < maxIdleRounds &&
+          roundsWithoutNew < maxRoundsWithoutNew
+        ) {
+          if (maxMessages > 0 && state.messagesMap.size >= maxMessages) {
+            break;
+          }
 
-        const prevCount = state.messagesMap.size;
-        const prevScrollTop = container.scrollTop;
-        const prevScrollHeight = container.scrollHeight;
+          const prevCount = state.messagesMap.size;
+          const prevScrollTop = container.scrollTop;
+          const prevScrollHeight = container.scrollHeight;
 
-        // Scroll up toward the top of the message list
-        const step = Math.max(300, Math.floor(container.clientHeight * 0.75));
-        container.scrollTop = Math.max(0, container.scrollTop - step);
+          // Scroll up toward the top of the message list (the browser clamps the value)
+          const step = Math.max(300, Math.floor(container.clientHeight * 0.75));
+          container.scrollTop = prevScrollTop - step;
 
-        await sleep(650);
-        await collectVisibleMessages(container, includeImages);
+          await sleep(650);
+          await collectVisibleMessages(container, includeImages);
 
-        const grew =
-          state.messagesMap.size > prevCount ||
-          container.scrollHeight > prevScrollHeight ||
-          container.scrollTop !== prevScrollTop;
+          const gotNew = state.messagesMap.size > prevCount;
+          const moved =
+            container.scrollHeight !== prevScrollHeight ||
+            Math.abs(container.scrollTop - prevScrollTop) > 1;
 
-        if (container.scrollTop === 0 && !grew) {
-          idleRounds++;
-        } else if (state.messagesMap.size === prevCount && container.scrollTop === 0) {
-          idleRounds++;
-        } else {
-          idleRounds = 0;
+          roundsWithoutNew = gotNew ? 0 : roundsWithoutNew + 1;
+          idleRounds = gotNew || moved ? 0 : idleRounds + 1;
         }
       }
+    } finally {
+      state.running = false;
     }
+  }
 
-    state.running = false;
+  // Splits the export into chunks so no single extension message gets near Chrome's 64 MB limit
+  const CHUNK_CHAR_BUDGET = 8 * 1024 * 1024;
+
+  function approxMessageSize(m) {
+    let size = 500 + m.text.length + m.bodyHtml.length;
+    for (const img of m.images) size += img.length;
+    return size;
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === "GET_INFO") {
       sendResponse({
         chatTitle: getChatTitle(),
+        collectedTitle: state.chatTitle,
         running: state.running,
         count: state.messagesMap.size
       });
@@ -648,17 +732,36 @@
       return true;
     }
 
-    if (msg.type === "GET_MESSAGES") {
+    if (msg.type === "GET_EXPORT_META") {
       let messages = getOrderedMessages();
       const max = Number(msg.maxMessages) || 0;
       if (max > 0 && messages.length > max) {
         messages = messages.slice(-max);
       }
+      state.exportList = messages;
       sendResponse({
         chatTitle: state.chatTitle || getChatTitle(),
-        messages,
+        total: messages.length,
         avatars: Object.fromEntries(state.avatarsMap)
       });
+      return true;
+    }
+
+    if (msg.type === "GET_MESSAGES_CHUNK") {
+      const list = state.exportList || [];
+      const start = Math.max(0, Number(msg.start) || 0);
+      const chunk = [];
+      let size = 0;
+      for (let i = start; i < list.length; i++) {
+        const s = approxMessageSize(list[i]);
+        if (chunk.length > 0 && size + s > CHUNK_CHAR_BUDGET) break;
+        chunk.push(list[i]);
+        size += s;
+      }
+      if (start + chunk.length >= list.length) {
+        state.exportList = null;
+      }
+      sendResponse({ messages: chunk });
       return true;
     }
   });
