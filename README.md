@@ -23,7 +23,17 @@ Extensão para Google Chrome (Manifest V3) que exporta o histórico completo de 
    ```
 2. Abra `chrome://extensions/` no Google Chrome.
 3. Ative o **Modo do desenvolvedor** (canto superior direito).
-4. Clique em **Carregar sem compactação** (*Load unpacked*) e selecione a pasta `teams-chat-exporter`.
+4. Clique em **Carregar sem compactação** (*Load unpacked*) e selecione a pasta `teams-chat-exporter` (a que contém o `manifest.json`).
+
+Sem git, baixe o [ZIP do repositório](https://github.com/alexandregoes/teams-chat-exporter/archive/refs/heads/main.zip) e extraia-o.
+
+### Microsoft Edge
+
+O procedimento é o mesmo, com duas diferenças: abra `edge://extensions/`, ative o **Modo de desenvolvedor** (menu lateral) e use **Carregar extensão descompactada**.
+
+### Observação
+
+O navegador guarda o caminho da pasta carregada: não a mova nem a apague depois da instalação. Se mover, remova a extensão e carregue-a de novo pela nova pasta.
 
 ## Como usar
 
