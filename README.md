@@ -19,3 +19,7 @@ Extensão para Google Chrome que exporta o histórico de um chat específico abe
    - **Formato**: escolha `.html`, `.md`, `.json` ou `.txt`.
 4. Clique em **Coletar Chat** e aguarde a conclusão (ou clique em **Parar** a qualquer momento).
 5. Clique em **Baixar Arquivo**.
+
+## Licença
+
+Este projeto está licenciado sob a [Creative Commons BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (Atribuição - Não Comercial - Compartilha Igual). Veja o arquivo `LICENSE` para mais detalhes.
