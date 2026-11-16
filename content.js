@@ -716,7 +716,8 @@
 
     if (msg.type === "START_COLLECT") {
       runCollection({
-        autoScroll: Boolean(msg.autoScroll),
+        // The whole chat is always collected: scroll to the bottom, then up through the history
+        autoScroll: true,
         maxMessages: Number(msg.maxMessages) || 0,
         includeImages: msg.includeImages !== false
       }).then(() => {

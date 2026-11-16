@@ -1,12 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Teams Chat Exporter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Exporta o histórico de um chat específico do Microsoft Teams Web para HTML, Markdown, JSON ou TXT.",
+  "homepage_url": "https://github.com/alexandregoes/teams-chat-exporter",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage",
+    "alarms"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "host_permissions": [
     "https://teams.microsoft.com/*",
     "https://teams.live.com/*",

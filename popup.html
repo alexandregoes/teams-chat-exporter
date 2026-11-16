@@ -13,6 +13,12 @@
       <span id="statusBadge" class="badge badge-idle">Pronto</span>
     </header>
 
+    <nav class="tabs" role="tablist">
+      <button id="tabExport" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panelExport">Exportar</button>
+      <button id="tabAbout" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panelAbout">Sobre<span id="updateDot" class="update-dot" hidden title="Nova versão disponível"></span></button>
+    </nav>
+
+    <div id="panelExport" class="panel" role="tabpanel" aria-labelledby="tabExport">
     <section class="info-card">
       <div class="info-row">
         <span class="label">Chat atual:</span>
@@ -25,10 +31,6 @@
     </section>
 
     <section class="options">
-      <label class="checkbox-label">
-        <input type="checkbox" id="autoScroll" checked />
-        <span>Rolar para cima automaticamente (carregar histórico)</span>
-      </label>
       <label class="checkbox-label">
         <input type="checkbox" id="includeImages" checked />
         <span>Incluir imagens (embutidas no HTML)</span>
@@ -58,7 +60,43 @@
     </button>
 
     <p id="feedback" class="feedback"></p>
+    </div>
+
+    <div id="panelAbout" class="panel" role="tabpanel" aria-labelledby="tabAbout" hidden>
+    <section class="info-card">
+      <div class="info-row">
+        <span class="label">Versão instalada:</span>
+        <span id="versionLabel" class="value">–</span>
+      </div>
+      <p class="about-text">Exporta o histórico de um chat do Microsoft Teams Web para HTML, Markdown, JSON ou TXT.</p>
+      <div class="about-links">
+        <a id="repoLink" href="https://github.com/alexandregoes/teams-chat-exporter" target="_blank" rel="noopener noreferrer">https://github.com/alexandregoes/teams-chat-exporter</a>
+        <a id="issuesLink" href="https://github.com/alexandregoes/teams-chat-exporter/issues" target="_blank" rel="noopener noreferrer">Relatar problema</a>
+      </div>
+    </section>
+
+    <section class="options about">
+      <label class="checkbox-label">
+        <input type="checkbox" id="autoUpdateCheck" checked />
+        <span>Verificar atualizações automaticamente (1x por dia)</span>
+      </label>
+      <div class="about-row">
+        <span id="updateStatus" class="update-status"></span>
+        <button id="checkUpdateBtn" class="link-btn" type="button">Verificar agora</button>
+      </div>
+      <div id="updateBox" class="update-box" hidden>
+        <strong id="updateTitle"></strong>
+        <p>Baixe o ZIP, extraia os arquivos sobre a pasta da extensão e clique em Recarregar. Se você instalou com <code>git clone</code>, rode <code>git pull</code> e clique em Recarregar.</p>
+        <div class="actions">
+          <a id="downloadUpdateLink" class="btn btn-primary" href="https://github.com/alexandregoes/teams-chat-exporter/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">Baixar ZIP</a>
+          <button id="reloadExtBtn" class="btn btn-secondary" type="button">Recarregar</button>
+        </div>
+      </div>
+    </section>
+    </div>
   </div>
   <script src="popup.js"></script>
+  <script src="version-check.js"></script>
+  <script src="updater.js"></script>
 </body>
 </html>

@@ -1,7 +1,6 @@
 const statusBadge = document.getElementById("statusBadge");
 const chatTitleEl = document.getElementById("chatTitle");
 const msgCountEl = document.getElementById("msgCount");
-const autoScrollEl = document.getElementById("autoScroll");
 const includeImagesEl = document.getElementById("includeImages");
 const maxMessagesEl = document.getElementById("maxMessages");
 const exportFormatEl = document.getElementById("exportFormat");
@@ -9,6 +8,22 @@ const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const feedbackEl = document.getElementById("feedback");
+
+// Tabs: "Exportar" (main) and "Sobre" (version, repository, updates)
+const tabs = [
+  { btn: document.getElementById("tabExport"), panel: document.getElementById("panelExport") },
+  { btn: document.getElementById("tabAbout"), panel: document.getElementById("panelAbout") }
+];
+for (const tab of tabs) {
+  tab.btn.addEventListener("click", () => {
+    for (const t of tabs) {
+      const active = t === tab;
+      t.btn.classList.toggle("active", active);
+      t.btn.setAttribute("aria-selected", String(active));
+      t.panel.hidden = !active;
+    }
+  });
+}
 
 let pollTimer = null;
 let currentTabId = null;
@@ -741,7 +756,6 @@ startBtn.addEventListener("click", async () => {
   try {
     await chrome.tabs.sendMessage(currentTabId, {
       type: "START_COLLECT",
-      autoScroll: autoScrollEl.checked,
       maxMessages: Number(maxMessagesEl.value) || 0,
       includeImages: includeImagesEl.checked
     });
