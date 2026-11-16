@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teams Chat Exporter</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Teams Chat Exporter</h1>
+      <span id="statusBadge" class="badge badge-idle">Pronto</span>
+    </header>
+
+    <section class="info-card">
+      <div class="info-row">
+        <span class="label">Chat atual:</span>
+        <span id="chatTitle" class="value">Verificando...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Mensagens coletadas:</span>
+        <span id="msgCount" class="value">0</span>
+      </div>
+    </section>
+
+    <section class="options">
+      <label class="checkbox-label">
+        <input type="checkbox" id="autoScroll" checked />
+        <span>Rolar para cima automaticamente (carregar histórico)</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="includeImages" checked />
+        <span>Incluir imagens (embutidas no HTML)</span>
+      </label>
+      <div class="input-row">
+        <label for="maxMessages">Limite de mensagens (0 = todas):</label>
+        <input type="number" id="maxMessages" min="0" value="0" />
+      </div>
+      <div class="input-row">
+        <label for="exportFormat">Formato:</label>
+        <select id="exportFormat">
+          <option value="html" selected>HTML (.html)</option>
+          <option value="md">Markdown (.md)</option>
+          <option value="json">JSON (.json)</option>
+          <option value="txt">Texto simples (.txt)</option>
+        </select>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="startBtn" class="btn btn-primary">Coletar Chat</button>
+      <button id="stopBtn" class="btn btn-secondary" disabled>Parar</button>
+    </div>
+
+    <button id="downloadBtn" class="btn btn-success" disabled>
+      Baixar Arquivo
+    </button>
+
+    <p id="feedback" class="feedback"></p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
