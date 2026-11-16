@@ -8,7 +8,7 @@ Extensão para Google Chrome (Manifest V3) que exporta o histórico completo de 
   - Tema escuro padrão do Teams, com botão no cabeçalho para alternar entre **Tema claro** e **Tema escuro**.
   - Ordem cronológica correta (**mensagens mais antigas no topo**, mais recentes embaixo), com divisores de data e agrupamento de mensagens consecutivas.
   - Barra de busca integrada no HTML exportado (`Buscar no chat...`).
-- **Coleta completa de conteúdo:**
+- **Captura completa de conteúdo:**
   - **Fotos de perfil (avatares)** e **imagens das mensagens** embutidas em Base64 (funciona offline).
   - **Emoticons** Unicode e animados do Teams, além de **reações** (ex.: `👍 1`).
   - **Tabelas** preservadas com rolagem horizontal para colunas largas.
@@ -33,16 +33,16 @@ Extensão para Google Chrome (Manifest V3) que exporta o histórico completo de 
    - **Incluir imagens (embutidas no HTML)**: salva imagens, emoticons e fotos de perfil em Base64 dentro do HTML.
    - **Limite de mensagens**: deixe `0` para exportar todas ou informe um limite máximo.
    - **Formato**: escolha `.html`, `.md`, `.json` ou `.txt`.
-4. Clique em **Coletar Chat** e aguarde a conclusão (ou clique em **Parar** a qualquer momento).
+4. Clique em **Capturar Chat** e aguarde a conclusão (ou clique em **Parar** a qualquer momento).
 5. Clique em **Baixar Arquivo**.
 
-A coleta sempre percorre o chat inteiro: vai até a mensagem mais recente e depois sobe todo o histórico.
+A captura sempre percorre o chat inteiro: vai até a mensagem mais recente e depois sobe todo o histórico.
 
 ## Atualizações
 
 A aba **Sobre** do popup mostra a versão instalada, o link para este repositório e a verificação de novas versões:
 
-- **Verificar atualizações automaticamente (1x por dia)**: em segundo plano, compara uma vez por dia a versão instalada com a do `manifest.json` da branch `main` no GitHub, mesmo com o popup fechado. **Verificar agora** faz a consulta na hora.
+- **Verificar atualizações automaticamente**: em segundo plano, compara uma vez por dia a versão instalada com a do `manifest.json` da branch `main` no GitHub, mesmo com o popup fechado. **Verificar agora** faz a consulta na hora.
 - Quando há versão nova, o ícone da extensão na barra do Chrome ganha um selo vermelho `!`, a aba **Sobre** ganha um ponto vermelho e oferece **Baixar ZIP** e **Recarregar**. Extraia o ZIP sobre a pasta da extensão (ou rode `git pull`, se instalou com `git clone`) e clique em **Recarregar**.
 
 O Chrome não permite que uma extensão carregada sem compactação substitua os próprios arquivos, por isso a troca dos arquivos é manual.
@@ -57,6 +57,7 @@ Para publicar uma versão nova, aumente o campo `version` do `manifest.json` ant
 - `updater.js` — aba "Sobre" do popup (versão instalada, links e aviso de versão nova).
 - `background.js` — service worker que verifica novas versões uma vez por dia e marca o ícone da extensão.
 - `version-check.js` — consulta ao GitHub e armazenamento do resultado, compartilhados entre popup e service worker.
+- `icons/` — ícone da extensão em PNG (16, 32, 48 e 128 px) e o original em SVG.
 - `LICENSE` — licença do projeto.
 
 ## Licença

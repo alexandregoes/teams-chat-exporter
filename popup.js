@@ -68,11 +68,11 @@ async function refreshState() {
     msgCountEl.textContent = String(info.count || 0);
 
     if (info.running) {
-      setStatus("Coletando...", "running");
+      setStatus("Capturando...", "running");
       startBtn.disabled = true;
       stopBtn.disabled = false;
       downloadBtn.disabled = true;
-      setFeedback("Rolando o histórico e coletando mensagens...");
+      setFeedback("Rolando o histórico e capturando mensagens...");
     } else {
       startBtn.disabled = false;
       stopBtn.disabled = true;
@@ -83,7 +83,7 @@ async function refreshState() {
           info.collectedTitle && info.chatTitle && info.collectedTitle !== info.chatTitle;
         if (otherChat) {
           setFeedback(
-            `As ${info.count} mensagens coletadas são de "${info.collectedTitle}". Clique em Coletar Chat para coletar o chat atual.`,
+            `As ${info.count} mensagens capturadas são de "${info.collectedTitle}". Clique em Capturar Chat para capturar o chat atual.`,
             true
           );
         } else {
@@ -747,11 +747,11 @@ function triggerDownload(content, filename, mimeType) {
 
 startBtn.addEventListener("click", async () => {
   if (!currentTabId) return;
-  setStatus("Coletando...", "running");
+  setStatus("Capturando...", "running");
   startBtn.disabled = true;
   stopBtn.disabled = false;
   downloadBtn.disabled = true;
-  setFeedback("Iniciando coleta...");
+  setFeedback("Iniciando captura...");
 
   try {
     await chrome.tabs.sendMessage(currentTabId, {
@@ -765,14 +765,14 @@ startBtn.addEventListener("click", async () => {
     setStatus("Erro", "error");
     startBtn.disabled = false;
     stopBtn.disabled = true;
-    setFeedback("Não foi possível iniciar a coleta. Recarregue a página do Teams.", true);
+    setFeedback("Não foi possível iniciar a captura. Recarregue a página do Teams.", true);
   }
 });
 
 stopBtn.addEventListener("click", async () => {
   if (!currentTabId) return;
   await chrome.tabs.sendMessage(currentTabId, { type: "STOP_COLLECT" });
-  setFeedback("Parando coleta...");
+  setFeedback("Parando captura...");
 });
 
 downloadBtn.addEventListener("click", async () => {
